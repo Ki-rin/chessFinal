@@ -1,0 +1,60 @@
+[2025-06-08T10:19:43.617834] REGISTER_SUCCESS - User: unknown, Client: client_0, IP: ('127.0.0.1', 12170), Details: New user: Eliw (elinxsilver@gmail.com)
+[2025-06-08T10:20:05.614832] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12170), Details: User Eliw
+[2025-06-08T10:20:10.637480] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12170), Details: User Eliw disconnected
+[2025-06-08T10:22:02.484138] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12192), Details: User Eliw
+[2025-06-08T10:22:58.172293] REGISTER_FAILED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: Registration failed for Eliw: Username already exists
+[2025-06-08T10:22:59.548556] REGISTER_FAILED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: Registration failed for Eliw: Username already exists
+[2025-06-08T10:22:59.780746] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:22:59.979203] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:00.095777] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:07.503990] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:08.273225] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:08.469225] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:08.630971] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:09.998346] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12193), Details: IP: 127.0.0.1
+[2025-06-08T10:23:39.955738] LOGIN_SUCCESS - User: Eliw, Client: client_1, IP: ('127.0.0.1', 12213), Details: User Eliw
+[2025-06-08T10:24:28.923736] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12192), Details: User Eliw disconnected
+[2025-06-08T10:24:52.588547] LOGIN_SUCCESS - User: Eliw, Client: client_1, IP: ('127.0.0.1', 12213), Details: User Eliw
+[2025-06-08T10:25:23.890580] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12224), Details: IP: 127.0.0.1
+[2025-06-08T10:25:53.775606] REGISTER_RATE_LIMITED - User: unknown, Client: client_1, IP: ('127.0.0.1', 12224), Details: IP: 127.0.0.1
+[2025-06-08T10:27:37.534862] REGISTER_RATE_LIMITED - User: unknown, Client: client_0, IP: ('127.0.0.1', 12260), Details: IP: 127.0.0.1
+[2025-06-08T10:28:14.093253] REGISTER_SUCCESS - User: unknown, Client: client_0, IP: ('127.0.0.1', 12261), Details: New user: Eliuu (scamersbait@gmail.com)
+[2025-06-08T10:28:42.809611] REGISTER_SUCCESS - User: unknown, Client: client_0, IP: ('127.0.0.1', 12261), Details: New user: Eliu (fhjfjdhfffkjdf@gamil.com)
+[2025-06-08T10:30:13.581836] LOGIN_FAILED - User: unknown, Client: client_0, IP: ('127.0.0.1', 12266), Details: Invalid credentials for 1
+[2025-06-08T10:33:19.341983] REGISTER_SUCCESS - User: unknown, Client: client_0, IP: ('127.0.0.1', 12277), Details: New user: Eliw (scamersbait@gmail.com)
+[2025-06-08T10:33:29.271662] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12277), Details: User Eliw
+[2025-06-08T10:34:54.308103] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12277), Details: User Eliw disconnected
+[2025-06-08T10:35:45.881535] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12348), Details: User Eliw
+[2025-06-08T10:36:09.565111] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12348), Details: User Eliw disconnected
+[2025-06-08T10:36:22.884409] LOGIN_FAILED - User: unknown, Client: client_0, IP: ('127.0.0.1', 12349), Details: Invalid credentials for Eliww
+[2025-06-08T10:36:26.275290] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12349), Details: User Eliw
+[2025-06-08T10:37:15.632317] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12349), Details: User Eliw disconnected
+[2025-06-08T10:37:25.848951] LOGIN_RATE_LIMITED - User: unknown, Client: client_0, IP: ('127.0.0.1', 12356), Details: IP: 127.0.0.1
+[2025-06-08T10:37:36.268552] LOGIN_RATE_LIMITED - User: unknown, Client: client_0, IP: ('127.0.0.1', 12356), Details: IP: 127.0.0.1
+[2025-06-08T10:37:55.582318] LOGIN_RATE_LIMITED - User: unknown, Client: client_0, IP: ('127.0.0.1', 12357), Details: IP: 127.0.0.1
+[2025-06-08T10:38:12.388406] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12359), Details: User Eliw
+[2025-06-08T10:40:38.071144] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12359), Details: User Eliw disconnected
+[2025-06-08T10:40:47.623006] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12375), Details: User Eliw
+[2025-06-08T10:40:54.031779] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12375), Details: User Eliw disconnected
+[2025-06-08T10:41:10.480317] RESET_REQUEST - User: unknown, Client: client_0, IP: ('127.0.0.1', 12377), Details: Password reset requested for scamersbait@gmail.com
+[2025-06-08T10:45:10.171591] RESET_REQUEST - User: unknown, Client: client_0, IP: ('127.0.0.1', 12453), Details: Password reset requested for scamersbait@gmail.com
+[2025-06-08T10:45:39.534891] PASSWORD_RESET_SUCCESS - User: unknown, Client: client_0, IP: ('127.0.0.1', 12453), Details: Password reset for scamersbait@gmail.com
+[2025-06-08T10:45:50.833723] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12453), Details: User Eliw
+[2025-06-08T10:46:40.927229] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12453), Details: User Eliw disconnected
+[2025-06-08T10:47:17.774123] REGISTER_SUCCESS - User: unknown, Client: client_0, IP: ('127.0.0.1', 12456), Details: New user: Eliu (elinxsilver@gmail.com)
+[2025-06-08T10:47:26.466651] LOGIN_SUCCESS - User: Eliu, Client: client_0, IP: ('127.0.0.1', 12456), Details: User Eliu
+[2025-06-08T10:47:38.620826] LOGIN_SUCCESS - User: Eliw, Client: client_1, IP: ('127.0.0.1', 12463), Details: User Eliw
+[2025-06-08T10:51:42.059201] USER_DISCONNECT - User: Eliu, Client: client_0, IP: ('127.0.0.1', 12456), Details: User Eliu disconnected
+[2025-06-08T10:51:42.767601] USER_DISCONNECT - User: Eliw, Client: client_1, IP: ('127.0.0.1', 12463), Details: User Eliw disconnected
+[2025-06-08T10:52:57.528293] LOGIN_SUCCESS - User: Eliw, Client: client_1, IP: ('127.0.0.1', 12593), Details: User Eliw
+[2025-06-08T10:53:07.812120] LOGIN_SUCCESS - User: Eliu, Client: client_0, IP: ('127.0.0.1', 12592), Details: User Eliu
+[2025-06-08T10:53:27.019171] USER_DISCONNECT - User: Eliu, Client: client_0, IP: ('127.0.0.1', 12592), Details: User Eliu disconnected
+[2025-06-08T10:53:51.341093] USER_DISCONNECT - User: Eliw, Client: client_1, IP: ('127.0.0.1', 12593), Details: User Eliw disconnected
+[2025-06-08T10:54:59.291478] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12608), Details: User Eliw
+[2025-06-08T10:55:17.729690] LOGIN_SUCCESS - User: Eliu, Client: client_1, IP: ('127.0.0.1', 12609), Details: User Eliu
+[2025-06-08T10:58:58.745700] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12608), Details: User Eliw disconnected
+[2025-06-08T10:59:00.060400] USER_DISCONNECT - User: Eliu, Client: client_1, IP: ('127.0.0.1', 12609), Details: User Eliu disconnected
+[2025-06-08T10:59:13.984385] LOGIN_SUCCESS - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12637), Details: User Eliw
+[2025-06-08T10:59:24.358209] LOGIN_SUCCESS - User: Eliu, Client: client_1, IP: ('127.0.0.1', 12638), Details: User Eliu
+[2025-06-08T11:01:13.901677] USER_DISCONNECT - User: Eliw, Client: client_0, IP: ('127.0.0.1', 12637), Details: User Eliw disconnected
+[2025-06-08T11:01:17.929596] USER_DISCONNECT - User: Eliu, Client: client_1, IP: ('127.0.0.1', 12638), Details: User Eliu disconnected

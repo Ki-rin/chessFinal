@@ -1,3 +1,4 @@
+import pickle
 import socket
 import threading
 import json
@@ -6,9 +7,263 @@ import os
 import hashlib
 import secrets
 from enum import Enum
+import pickle
+import hashlib
+import secrets
+import smtplib
+import random
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.backends import default_backend
+
+
+class UserDatabase:
+    def __init__(self, db_file='users.db'):
+        self.db_file = db_file
+        self.pepper = "SECURE_CHESS_PEPPER_2025"  # Change this in production
+        self.users = self.load_database()
+        self.password_reset_codes = {}  # email -> (code, expiry_time)
+
+    def load_database(self):
+        """Load user database from pickle file"""
+        try:
+            with open(self.db_file, 'rb') as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            print("📁 Creating new user database...")
+            return {}
+        except Exception as e:
+            print(f"❌ Error loading database: {e}")
+            return {}
+
+    def save_database(self):
+        """Save user database to pickle file"""
+        try:
+            with open(self.db_file, 'wb') as f:
+                pickle.dump(self.users, f)
+            return True
+        except Exception as e:
+            print(f"❌ Error saving database: {e}")
+            return False
+
+    def hash_password(self, password, salt):
+        """Hash password with salt and pepper"""
+        salted_peppered = password + salt + self.pepper
+        return hashlib.sha256(salted_peppered.encode()).hexdigest()
+
+    def register_user(self, username, password, email):
+        """Register a new user"""
+        if username in self.users:
+            return {"success": False, "message": "Username already exists"}
+
+        if any(user['email'] == email for user in self.users.values()):
+            return {"success": False, "message": "Email already registered"}
+
+        # Generate salt and hash password
+        salt = secrets.token_hex(16)
+        password_hash = self.hash_password(password, salt)
+
+        # Store user data
+        self.users[username] = {
+            'password_hash': password_hash,
+            'salt': salt,
+            'email': email,
+            'created_at': datetime.now().isoformat(),
+            'last_login': None
+        }
+
+        if self.save_database():
+            print(f"👤 New user registered: {username}")
+            return {"success": True, "message": "User registered successfully"}
+        else:
+            return {"success": False, "message": "Database error"}
+
+    def authenticate_user(self, username, password):
+        """Authenticate user login"""
+        if username not in self.users:
+            return {"success": False, "message": "Invalid username or password"}
+
+        user_data = self.users[username]
+        password_hash = self.hash_password(password, user_data['salt'])
+
+        if password_hash == user_data['password_hash']:
+            # Update last login
+            self.users[username]['last_login'] = datetime.now().isoformat()
+            self.save_database()
+            print(f"🔐 User authenticated: {username}")
+            return {"success": True, "message": "Login successful", "user": username}
+        else:
+            return {"success": False, "message": "Invalid username or password"}
+
+    def send_reset_code(self, email, smtp_config=None):
+        """Send password reset code via email"""
+        # Find user by email
+        username = None
+        for user, data in self.users.items():
+            if data['email'] == email:
+                username = user
+                break
+
+        if not username:
+            return {"success": False, "message": "Email not found"}
+
+        # Generate 6-digit code
+        reset_code = str(random.randint(100000, 999999))
+        expiry_time = datetime.now() + timedelta(minutes=15)  # 15 minute expiry
+
+        self.password_reset_codes[email] = (reset_code, expiry_time)
+
+        # Send email (configure SMTP settings as needed)
+        if smtp_config:
+            try:
+                msg = MIMEMultipart()
+                msg['From'] = smtp_config['from_email']
+                msg['To'] = email
+                msg['Subject'] = "Secure Chess - Password Reset Code"
+
+                body = f"""
+                Your password reset code is: {reset_code}
+
+                This code will expire in 15 minutes.
+                If you didn't request this reset, please ignore this email.
+
+                - Secure Chess Team
+                """
+
+                msg.attach(MIMEText(body, 'plain'))
+
+                server = smtplib.SMTP(smtp_config['smtp_server'], smtp_config['smtp_port'])
+                server.starttls()
+                server.login(smtp_config['from_email'], smtp_config['password'])
+                server.send_message(msg)
+                server.quit()
+
+                print(f"📧 Reset code sent to {email}")
+                return {"success": True, "message": "Reset code sent to email"}
+            except Exception as e:
+                print(f"❌ Email send error: {e}")
+                # For demo purposes, print the code
+                print(f"🔑 Demo mode - Reset code for {email}: {reset_code}")
+                return {"success": True, "message": f"Demo: Reset code is {reset_code}"}
+        else:
+            # Demo mode - just print the code
+            print(f"🔑 Demo mode - Reset code for {email}: {reset_code}")
+            return {"success": True, "message": f"Demo: Reset code is {reset_code}"}
+
+    def verify_reset_code(self, email, code):
+        """Verify password reset code"""
+        if email not in self.password_reset_codes:
+            return {"success": False, "message": "No reset code found"}
+
+        stored_code, expiry_time = self.password_reset_codes[email]
+
+        if datetime.now() > expiry_time:
+            del self.password_reset_codes[email]
+            return {"success": False, "message": "Reset code expired"}
+
+        if code != stored_code:
+            return {"success": False, "message": "Invalid reset code"}
+
+        return {"success": True, "message": "Code verified"}
+
+    def reset_password(self, email, code, new_password):
+        """Reset password with verified code"""
+        # Verify code first
+        verify_result = self.verify_reset_code(email, code)
+        if not verify_result["success"]:
+            return verify_result
+
+        # Find username by email
+        username = None
+        for user, data in self.users.items():
+            if data['email'] == email:
+                username = user
+                break
+
+        if not username:
+            return {"success": False, "message": "User not found"}
+
+        # Generate new salt and hash
+        salt = secrets.token_hex(16)
+        password_hash = self.hash_password(new_password, salt)
+
+        # Update password
+        self.users[username]['password_hash'] = password_hash
+        self.users[username]['salt'] = salt
+
+        # Remove used reset code
+        del self.password_reset_codes[email]
+
+        if self.save_database():
+            print(f"🔑 Password reset for user: {username}")
+            return {"success": True, "message": "Password reset successfully"}
+        else:
+            return {"success": False, "message": "Database error"}
+
+
+def backup_database():
+    """Create a backup of the user database"""
+    import shutil
+    import datetime
+
+    if os.path.exists('users.db'):
+        backup_name = f"users_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        shutil.copy2('users.db', backup_name)
+        print(f"💾 Database backed up to {backup_name}")
+        return True
+    return False
+
+
+def reset_database():
+    """Reset the user database (admin function)"""
+    import os
+    if os.path.exists('users.db'):
+        os.remove('users.db')
+        print("🗑️ User database reset")
+        return True
+    return False
+
+
+def list_users():
+    """List all registered users (admin function)"""
+    try:
+        with open('users.db', 'rb') as f:
+            users = pickle.load(f)
+
+        print(f"👥 Registered Users ({len(users)}):")
+        for username, data in users.items():
+            last_login = data.get('last_login', 'Never')
+            if last_login and last_login != 'Never':
+                last_login = last_login[:19]  # Show date/time only
+            print(f"  • {username} ({data['email']}) - Last login: {last_login}")
+
+        return users
+    except FileNotFoundError:
+        print("📁 No user database found")
+        return {}
+    except Exception as e:
+        print(f"❌ Error reading database: {e}")
+        return {}
+
+def load_email_config():
+    """Load email configuration from config.py"""
+    try:
+        from config import EMAIL_CONFIG
+        if EMAIL_CONFIG.get('enabled', False):
+            return EMAIL_CONFIG
+        else:
+            print("📧 Email functionality disabled in config.py")
+            return None
+    except ImportError:
+        print("📧 No config.py found - email functionality disabled")
+        print("💡 Create config.py to enable password reset emails")
+        return None
+    except Exception as e:
+        print(f"❌ Error loading email config: {e}")
+        return None
 
 
 class PieceType(Enum):
@@ -480,6 +735,210 @@ class SecureChessServer:
         self.games = {}
         self.waiting_players = []
         self.game_counter = 0
+        # Initialize user database and email config
+        self.user_db = UserDatabase()
+        self.smtp_config = load_email_config()
+        self.rate_limiter = RateLimiter()
+
+        if self.smtp_config:
+            print("✅ Email configuration loaded - password reset emails enabled")
+            print(f"📧 SMTP Server: {self.smtp_config['smtp_server']}")
+        else:
+            print("⚠️ Email configuration not available - password reset will show codes in console")
+
+
+    def log_security_event(self, event_type, client_id, details=None):
+        """Log security-related events"""
+        timestamp = datetime.now().isoformat()
+        client_info = self.clients.get(client_id, {})
+        username = client_info.get('username', 'unknown')
+        address = client_info.get('address', 'unknown')
+
+        log_entry = f"[{timestamp}] {event_type} - User: {username}, Client: {client_id}, IP: {address}"
+        if details:
+            log_entry += f", Details: {details}"
+
+        print(f"🔐 {log_entry}")
+
+        # Optionally save to security log file
+        try:
+            with open('security.log', 'a') as f:
+                f.write(log_entry + '\n')
+        except:
+            pass
+
+
+    # Enhanced authentication handlers with logging
+    def handle_login(self, client_id, message):
+        """"Handle user login with rate limiting and enhanced security logging"""
+        client = self.clients[client_id]
+        ip_address = str(client['address'][0])
+
+        # Check rate limiting
+        if self.rate_limiter.is_rate_limited(ip_address, 'login'):
+            self.log_security_event("LOGIN_RATE_LIMITED", client_id, f"IP: {ip_address}")
+            self.send_error(client_id, "Too many login attempts. Please try again later.")
+            return
+
+        username = message.get('username', '').strip()
+        password = message.get('password', '')
+
+        # Record the attempt
+        self.rate_limiter.record_attempt(ip_address, 'login')
+
+        if not username or not password:
+            self.log_security_event("LOGIN_FAILED", client_id, "Missing credentials")
+            self.send_error(client_id, "Username and password required")
+            return
+
+        result = self.user_db.authenticate_user(username, password)
+
+        if result["success"]:
+            self.clients[client_id]['authenticated'] = True
+            self.clients[client_id]['username'] = username
+
+            self.log_security_event("LOGIN_SUCCESS", client_id, f"User {username}")
+
+            self.send_encrypted_message(client_id, {
+                'type': 'login_success',
+                'message': result["message"],
+                'username': username
+            })
+        else:
+            self.log_security_event("LOGIN_FAILED", client_id, f"Invalid credentials for {username}")
+            self.send_error(client_id, result["message"])
+
+    def handle_register(self, client_id, message):
+        """Handle user registration with rate limiting and enhanced validation"""
+        client = self.clients[client_id]
+        ip_address = str(client['address'][0])
+
+        # Check rate limiting
+        if self.rate_limiter.is_rate_limited(ip_address, 'register'):
+            self.log_security_event("REGISTER_RATE_LIMITED", client_id, f"IP: {ip_address}")
+            self.send_error(client_id, "Too many registration attempts. Please try again later.")
+            return
+
+        username = message.get('username', '').strip()
+        password = message.get('password', '')
+        email = message.get('email', '').strip()
+
+        # Record the attempt
+        self.rate_limiter.record_attempt(ip_address, 'register')
+
+        # Enhanced validation
+        if not username or not password or not email:
+            self.log_security_event("REGISTER_FAILED", client_id, "Missing required fields")
+            self.send_error(client_id, "All fields are required")
+            return
+
+        if len(username) < 3 or len(username) > 20:
+            self.log_security_event("REGISTER_FAILED", client_id, f"Invalid username length: {username}")
+            self.send_error(client_id, "Username must be 3-20 characters")
+            return
+
+        if len(password) < 6 or len(password) > 100:
+            self.log_security_event("REGISTER_FAILED", client_id, "Invalid password length")
+            self.send_error(client_id, "Password must be 6-100 characters")
+            return
+
+        if '@' not in email or '.' not in email or len(email) > 100:
+            self.log_security_event("REGISTER_FAILED", client_id, f"Invalid email: {email}")
+            self.send_error(client_id, "Invalid email format")
+            return
+
+        # Check for username/email restrictions
+        prohibited_usernames = ['admin', 'root', 'system', 'server', 'bot', 'moderator', 'guest']
+        if username.lower() in prohibited_usernames:
+            self.log_security_event("REGISTER_FAILED", client_id, f"Prohibited username: {username}")
+            self.send_error(client_id, "Username not allowed")
+            return
+
+        # Check for alphanumeric username
+        if not username.replace('_', '').replace('-', '').isalnum():
+            self.log_security_event("REGISTER_FAILED", client_id, f"Invalid username characters: {username}")
+            self.send_error(client_id, "Username can only contain letters, numbers, hyphens, and underscores")
+            return
+
+        result = self.user_db.register_user(username, password, email)
+
+        if result["success"]:
+            self.log_security_event("REGISTER_SUCCESS", client_id, f"New user: {username} ({email})")
+            self.send_encrypted_message(client_id, {
+                'type': 'register_success',
+                'message': result["message"]
+            })
+        else:
+            self.log_security_event("REGISTER_FAILED", client_id,
+                                    f"Registration failed for {username}: {result['message']}")
+            self.send_error(client_id, result["message"])
+
+    def handle_password_reset_request(self, client_id, message):
+        """Handle password reset request with rate limiting"""
+        client = self.clients[client_id]
+        ip_address = str(client['address'][0])
+
+        # Check rate limiting
+        if self.rate_limiter.is_rate_limited(ip_address, 'reset'):
+            self.log_security_event("RESET_RATE_LIMITED", client_id, f"IP: {ip_address}")
+            self.send_error(client_id, "Too many reset attempts. Please try again later.")
+            return
+
+        email = message.get('email', '').strip()
+
+        # Record the attempt
+        self.rate_limiter.record_attempt(ip_address, 'reset')
+
+        if not email:
+            self.log_security_event("RESET_REQUEST_FAILED", client_id, "No email provided")
+            self.send_error(client_id, "Email required")
+            return
+
+        if len(email) > 100:
+            self.log_security_event("RESET_REQUEST_FAILED", client_id, f"Email too long: {email}")
+            self.send_error(client_id, "Invalid email")
+            return
+
+        self.log_security_event("RESET_REQUEST", client_id, f"Password reset requested for {email}")
+
+        result = self.user_db.send_reset_code(email, self.smtp_config)
+
+        self.send_encrypted_message(client_id, {
+            'type': 'reset_code_sent',
+            'message': result["message"],
+            'success': result["success"]
+        })
+
+    def handle_password_reset(self, client_id, message):
+        """Handle password reset with enhanced logging"""
+        email = message.get('email', '').strip()
+        code = message.get('code', '').strip()
+        new_password = message.get('new_password', '')
+
+        if not email or not code or not new_password:
+            self.log_security_event("PASSWORD_RESET_FAILED", client_id, "Missing required fields")
+            self.send_error(client_id, "All fields required")
+            return
+
+        if len(new_password) < 6:
+            self.log_security_event("PASSWORD_RESET_FAILED", client_id, "New password too short")
+            self.send_error(client_id, "Password must be at least 6 characters")
+            return
+
+        result = self.user_db.reset_password(email, code, new_password)
+
+        if result["success"]:
+            self.log_security_event("PASSWORD_RESET_SUCCESS", client_id, f"Password reset for {email}")
+        else:
+            self.log_security_event("PASSWORD_RESET_FAILED", client_id,
+                                    f"Reset failed for {email}: {result['message']}")
+
+        self.send_encrypted_message(client_id, {
+            'type': 'password_reset_result',
+            'message': result["message"],
+            'success': result["success"]
+        })
+
 
     def start(self):
         self.socket.bind((self.host, self.port))
@@ -665,13 +1124,40 @@ class SecureChessServer:
         msg_type = message.get('type')
         print(f"⚙️  Processing message from {client_id}: {msg_type}")
 
-        if msg_type == 'join_queue':
+        # Authentication-related messages (allowed for non-authenticated users)
+        if msg_type == 'register':
+            self.handle_register(client_id, message)
+        elif msg_type == 'login':
+            self.handle_login(client_id, message)
+        elif msg_type == 'password_reset_request':
+            self.handle_password_reset_request(client_id, message)
+        elif msg_type == 'password_reset':
+            self.handle_password_reset(client_id, message)
+
+        # Game-related messages (require authentication)
+        elif msg_type == 'join_queue':
+            if not self.clients[client_id].get('authenticated'):
+                self.log_security_event("UNAUTHORIZED_ACCESS", client_id,
+                                        "Attempted to join queue without authentication")
+                self.send_error(client_id, "Please login first")
+                return
             self.add_to_queue(client_id)
         elif msg_type == 'move':
+            if not self.clients[client_id].get('authenticated'):
+                self.log_security_event("UNAUTHORIZED_ACCESS", client_id,
+                                        "Attempted to make move without authentication")
+                self.send_error(client_id, "Please login first")
+                return
             self.handle_move(client_id, message)
         elif msg_type == 'spectate':
+            if not self.clients[client_id].get('authenticated'):
+                self.log_security_event("UNAUTHORIZED_ACCESS", client_id,
+                                        "Attempted to spectate without authentication")
+                self.send_error(client_id, "Please login first")
+                return
             self.handle_spectate(client_id, message)
         else:
+            self.log_security_event("UNKNOWN_MESSAGE", client_id, f"Unknown message type: {msg_type}")
             print(f"❓ Unknown message type: {msg_type}")
 
     def add_to_queue(self, client_id):
@@ -874,11 +1360,17 @@ class SecureChessServer:
         print(f"⏰ Started cleanup timer for game {game_id}")
 
     def disconnect_client(self, client_id):
-        """Handle client disconnection"""
+        """Handle client disconnection with enhanced logging"""
         if client_id in self.clients:
             client = self.clients[client_id]
+            username = client.get('username', 'unknown')
+            address = client.get('address', 'unknown')
+            was_authenticated = client.get('authenticated', False)
 
-            print(f"👋 Disconnecting client {client_id}")
+            if was_authenticated:
+                self.log_security_event("USER_DISCONNECT", client_id, f"User {username} disconnected")
+
+            print(f"👋 Disconnecting client {client_id} (user: {username})")
 
             # Remove from waiting queue
             if client_id in self.waiting_players:
@@ -919,32 +1411,82 @@ class SecureChessServer:
             del self.clients[client_id]
             print(f"✅ Client {client_id} disconnected and cleaned up")
 
+
     def get_server_stats(self):
         """Get current server statistics"""
-        active_games = len([g for g in self.games.values() if g.state == GameState.PLAYING])
-        total_clients = len(self.clients)
-        waiting_count = len(self.waiting_players)
 
-        return {
-            'total_clients': total_clients,
-            'active_games': active_games,
-            'waiting_players': waiting_count,
-            'total_games_created': self.game_counter
+        stats = {
+            'total_clients': len(self.clients),
+            'active_games': len([g for g in self.games.values() if g.state == GameState.PLAYING]),
+            'waiting_players': len(self.waiting_players),
+            'total_games_created': self.game_counter,
+            'authenticated_users': len([c for c in self.clients.values() if c.get('authenticated')]),
+            'total_registered_users': len(self.user_db.users),
+            'pending_reset_codes': len(self.user_db.password_reset_codes)
         }
+        return stats
+
 
     def print_server_stats(self):
-        """Print current server statistics"""
+        """Print enhanced server statistics"""
         stats = self.get_server_stats()
         print(f"\n📊 Server Statistics:")
         print(f"   👥 Total Clients: {stats['total_clients']}")
+        print(f"   🔐 Authenticated Users: {stats['authenticated_users']}")
         print(f"   🎮 Active Games: {stats['active_games']}")
         print(f"   ⏳ Waiting Players: {stats['waiting_players']}")
         print(f"   🎯 Total Games Created: {stats['total_games_created']}")
+        print(f"   👤 Registered Users: {stats['total_registered_users']}")
+        print(f"   🔑 Pending Reset Codes: {stats['pending_reset_codes']}")
         print("-" * 50)
 
 
+class RateLimiter:
+    def __init__(self):
+        self.attempts = {}  # IP -> [(timestamp, action), ...]
+        self.max_attempts = {
+            'login': 5,  # 5 login attempts per 15 minutes
+            'register': 3,  # 3 registration attempts per 15 minutes
+            'reset': 3  # 3 password reset attempts per 15 minutes
+        }
+        self.time_window = 900  # 15 minutes in seconds
+
+    def is_rate_limited(self, ip_address, action):
+        """Check if IP is rate limited for specific action"""
+        current_time = time.time()
+
+        if ip_address not in self.attempts:
+            self.attempts[ip_address] = []
+
+        # Clean old attempts outside time window
+        self.attempts[ip_address] = [
+            (timestamp, act) for timestamp, act in self.attempts[ip_address]
+            if current_time - timestamp < self.time_window
+        ]
+
+        # Count attempts for this action
+        action_attempts = [
+            timestamp for timestamp, act in self.attempts[ip_address]
+            if act == action
+        ]
+
+        return len(action_attempts) >= self.max_attempts.get(action, 5)
+
+    def record_attempt(self, ip_address, action):
+        """Record an authentication attempt"""
+        current_time = time.time()
+
+        if ip_address not in self.attempts:
+            self.attempts[ip_address] = []
+
+        self.attempts[ip_address].append((current_time, action))
+
+
 def main():
-    """Main server function with enhanced error handling"""
+    """Main server function with enhanced error handling and user management"""
+    print("🔒 Secure Chess Server v2.0 with User Authentication")
+    print("=" * 60)
+
     # Install required dependency if not present
     try:
         from cryptography.hazmat.primitives.ciphers import Cipher
@@ -969,7 +1511,7 @@ def main():
         def print_stats_periodically():
             import time
             while True:
-                time.sleep(60)  # Print stats every minute
+                time.sleep(300)  # Print stats every 5 minutes
                 try:
                     server.print_server_stats()
                 except:
@@ -978,6 +1520,25 @@ def main():
         stats_thread = threading.Thread(target=print_stats_periodically)
         stats_thread.daemon = True
         stats_thread.start()
+
+        # Print initial server info
+        print(f"\n🚀 Server starting on {server.host}:{server.port}")
+        print("Features enabled:")
+        print("  🔐 User authentication with secure password storage")
+        print("  🔑 Password reset system")
+        print("  🛡️ Rate limiting for authentication attempts")
+        print("  📊 Enhanced security logging")
+        print("  🎮 Encrypted multiplayer chess")
+
+        if server.smtp_config:
+            print("  📧 Email notifications for password reset")
+        else:
+            print("  📧 Email notifications: DISABLED (edit config.py to enable)")
+
+        print(f"\n💾 User database: users.db")
+        print(f"📋 Security log: security.log")
+        print(f"👥 Registered users: {len(server.user_db.users)}")
+        print("-" * 60)
 
         # Start the server
         server.start()
@@ -990,6 +1551,8 @@ def main():
         # Close all client connections
         for client_id, client in list(server.clients.items()):
             try:
+                if client.get('authenticated'):
+                    server.log_security_event("SERVER_SHUTDOWN", client_id, f"User {client.get('username', 'unknown')}")
                 client['socket'].close()
             except:
                 pass
@@ -1001,11 +1564,19 @@ def main():
             pass
 
         print("✅ Server shutdown complete")
+        print(f"💾 User data preserved in users.db ({len(server.user_db.users)} users)")
 
     except Exception as e:
         print(f"❌ Server error: {e}")
         import traceback
         traceback.print_exc()
+
+        # Try to save any pending database changes
+        try:
+            server.user_db.save_database()
+            print("💾 Database saved before shutdown")
+        except:
+            pass
 
 
 if __name__ == "__main__":

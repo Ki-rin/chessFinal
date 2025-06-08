@@ -1,4 +1,5 @@
 import pygame
+import pygame_gui
 import socket
 import json
 import threading
@@ -38,6 +39,9 @@ TEXT_COLOR = (50, 50, 50)
 
 
 class GameState(Enum):
+    LOGIN = "login"
+    REGISTER = "register"
+    PASSWORD_RESET = "password_reset"
     MENU = "menu"
     WAITING = "waiting"
     PLAYING = "playing"
@@ -54,6 +58,32 @@ class CryptoManager:
         self.aes_key = None
         self.dh_prime = None
         self.dh_generator = None
+        self.authenticated = False
+        self.username = None
+
+        # GUI Manager for text input
+        self.gui_manager = pygame_gui.UIManager((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+        # Login/Register fields
+        self.username_input = None
+        self.password_input = None
+        self.email_input = None
+        self.confirm_password_input = None
+        self.reset_code_input = None
+        self.new_password_input = None
+
+        # Buttons
+        self.login_button = None
+        self.register_button = None
+        self.switch_to_register_button = None
+        self.switch_to_login_button = None
+        self.password_reset_button = None
+        self.send_reset_button = None
+        self.confirm_reset_button = None
+        self.back_to_login_button = None
+
+        # Start in login state
+        self.state = GameState.LOGIN
 
     def set_dh_parameters(self, prime, generator):
         """Set DH parameters received from server"""
@@ -136,7 +166,7 @@ class SecureChessClient:
 
         # Initialize Pygame display
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        pygame.display.set_caption("🔒 Secure Chess 9x9 Online")
+        pygame.display.set_caption("Secure Chess 9x9 Online")
         self.clock = pygame.time.Clock()
 
         # Network state
@@ -147,8 +177,12 @@ class SecureChessClient:
         # Crypto manager
         self.crypto = CryptoManager()
 
+        # Authentication state
+        self.authenticated = False
+        self.username = None
+
         # Core game state
-        self.state = GameState.MENU
+        self.state = GameState.LOGIN  # Start with login
         self.board = [[None for _ in range(9)] for _ in range(9)]
         self.selected_piece = None
         self.valid_moves = []
@@ -181,6 +215,344 @@ class SecureChessClient:
         # Initialize piece sprites
         self.piece_sprites = {}
         self.load_piece_sprites()
+
+        # Try to initialize GUI components
+        try:
+            import pygame_gui
+            self.gui_manager = pygame_gui.UIManager((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+            # Initialize UI element references as None
+            self.username_input = None
+            self.password_input = None
+            self.email_input = None
+            self.confirm_password_input = None
+            self.reset_code_input = None
+            self.new_password_input = None
+            self.login_button = None
+            self.register_button = None
+            self.switch_to_register_button = None
+            self.switch_to_login_button = None
+            self.password_reset_button = None
+            self.send_reset_button = None
+            self.confirm_reset_button = None
+            self.back_to_login_button = None
+
+            # Setup login UI
+            self.setup_login_ui()
+
+        except ImportError:
+            print("❌ pygame_gui required for login system")
+            print("Installing pygame_gui...")
+            import subprocess
+            import sys
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "pygame_gui"])
+                print("✅ Installed pygame_gui. Please restart the client.")
+                sys.exit(0)
+            except:
+                print("❌ Install failed. Run: pip install pygame_gui")
+                sys.exit(1)
+
+    def setup_login_ui(self):
+        """Setup login UI elements"""
+        self.clear_ui()
+
+        # Username field
+        self.username_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 200, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Username"
+        )
+
+        # Password field
+        self.password_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 250, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Password"
+        )
+        self.password_input.set_text_hidden(True)
+
+        # Login button
+        self.login_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 75, 300, 150, 40),
+            text="Login",
+            manager=self.gui_manager
+        )
+
+        # Switch to register button
+        self.switch_to_register_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 100, 350, 200, 35),
+            text="Create Account",
+            manager= self.gui_manager
+        )
+
+        # Password reset button
+        self.password_reset_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 100, 395, 200, 35),
+            text="Forgot Password",
+            manager= self.gui_manager
+        )
+
+    def setup_register_ui(self):
+        """Setup registration UI elements"""
+        self.clear_ui()
+
+        # Username field
+        self.username_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 180, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Username (min 3 characters)"
+        )
+
+        # Email field
+        self.email_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 225, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Email"
+        )
+
+        # Password field
+        self.password_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 270, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Password (min 6 characters)"
+        )
+        self.password_input.set_text_hidden(True)
+
+        # Confirm password field
+        self.confirm_password_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 315, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Confirm Password"
+        )
+        self.confirm_password_input.set_text_hidden(True)
+
+        # Register button
+        self.register_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 75, 365, 150, 40),
+            text="Register",
+            manager=self.gui_manager
+        )
+
+        # Back to login button
+        self.switch_to_login_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 100, 415, 200, 35),
+            text="Back to Login",
+            manager=self.gui_manager
+        )
+
+
+    def setup_password_reset_ui(self):
+        """Setup password reset UI elements"""
+        self.clear_ui()
+
+        # Email field
+        self.email_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 200, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Email"
+        )
+
+        # Send reset code button
+        self.send_reset_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 100, 250, 200, 40),
+            text="Send Reset Code",
+            manager=self.gui_manager
+        )
+
+        # Reset code field
+        self.reset_code_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 310, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="Reset Code"
+        )
+
+        # New password field
+        self.new_password_input = pygame_gui.elements.UITextEntryLine(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 150, 355, 300, 35),
+            manager=self.gui_manager,
+            placeholder_text="New Password"
+        )
+        self.new_password_input.set_text_hidden(True)
+
+        # Confirm reset button
+        self.confirm_reset_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 100, 405, 200, 40),
+            text="Reset Password",
+            manager=self.gui_manager
+        )
+
+        # Back to login button
+        self.back_to_login_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(WINDOW_WIDTH // 2 - 100, 455, 200, 35),
+            text="Back to Login",
+            manager=self.gui_manager
+        )
+
+    def clear_ui(self):
+        """Clear all UI elements"""
+        self.gui_manager.clear_and_reset()
+
+        # Reset all input references
+        self.username_input = None
+        self.password_input = None
+        self.email_input = None
+        self.confirm_password_input = None
+        self.reset_code_input = None
+        self.new_password_input = None
+
+        # Reset all button references
+        self.login_button = None
+        self.register_button = None
+        self.switch_to_register_button = None
+        self.switch_to_login_button = None
+        self.password_reset_button = None
+        self.send_reset_button = None
+        self.confirm_reset_button = None
+        self.back_to_login_button = None
+
+    def handle_ui_event(self, event):
+        """Handle pygame_gui events"""
+        if event.type == pygame_gui.UI_BUTTON_PRESSED:
+            if event.ui_element == self.login_button:
+                self.attempt_login()
+            elif event.ui_element == self.register_button:
+                self.attempt_register()
+            elif event.ui_element == self.switch_to_register_button:
+                self.state = GameState.REGISTER
+                self.setup_register_ui()
+            elif event.ui_element == self.switch_to_login_button:
+                self.state = GameState.LOGIN
+                self.setup_login_ui()
+            elif event.ui_element == self.password_reset_button:
+                self.state = GameState.PASSWORD_RESET
+                self.setup_password_reset_ui()
+            elif event.ui_element == self.send_reset_button:
+                self.send_password_reset_request()
+            elif event.ui_element == self.confirm_reset_button:
+                self.attempt_password_reset()
+            elif event.ui_element == self.back_to_login_button:
+                self.state = GameState.LOGIN
+                self.setup_login_ui()
+
+        elif event.type == pygame_gui.UI_TEXT_ENTRY_FINISHED:
+            # Handle Enter key in text fields
+            if self.state == GameState.LOGIN and event.ui_element in [self.username_input, self.password_input]:
+                self.attempt_login()
+            elif self.state == GameState.REGISTER and event.ui_element == self.confirm_password_input:
+                self.attempt_register()
+
+    def attempt_login(self):
+        """Attempt to login with entered credentials"""
+        if not self.username_input or not self.password_input:
+            return
+
+        username = self.username_input.get_text().strip()
+        password = self.password_input.get_text()
+
+        if not username or not password:
+            self.add_message("❌ Please enter username and password")
+            return
+
+        if self.connected and self.secure:
+            self.send_encrypted_message({
+                'type': 'login',
+                'username': username,
+                'password': password
+            })
+            self.add_message(f"Logging in as {username}...")
+        else:
+            self.add_message("Not connected to server")
+
+    def attempt_register(self):
+        """Attempt to register with entered details"""
+        if not all([self.username_input, self.email_input, self.password_input, self.confirm_password_input]):
+            return
+
+        username = self.username_input.get_text().strip()
+        email = self.email_input.get_text().strip()
+        password = self.password_input.get_text()
+        confirm_password = self.confirm_password_input.get_text()
+
+        if not all([username, email, password, confirm_password]):
+            self.add_message("❌ Please fill all fields")
+            return
+
+        if password != confirm_password:
+            self.add_message("❌ Passwords don't match")
+            return
+
+        if len(username) < 3:
+            self.add_message("❌ Username must be at least 3 characters")
+            return
+
+        if len(password) < 6:
+            self.add_message("❌ Password must be at least 6 characters")
+            return
+
+        if '@' not in email:
+            self.add_message("❌ Invalid email format")
+            return
+
+        if self.connected and self.secure:
+            self.send_encrypted_message({
+                'type': 'register',
+                'username': username,
+                'email': email,
+                'password': password
+            })
+            self.add_message(f"Registering user {username}...")
+        else:
+            self.add_message("❌ Not connected to server")
+
+    def send_password_reset_request(self):
+        """Send password reset request"""
+        if not self.email_input:
+            return
+
+        email = self.email_input.get_text().strip()
+
+        if not email:
+            self.add_message("❌ Please enter email")
+            return
+
+        if self.connected and self.secure:
+            self.send_encrypted_message({
+                'type': 'password_reset_request',
+                'email': email
+            })
+            self.add_message(f"📧 Sending reset code to {email}...")
+        else:
+            self.add_message("❌ Not connected to server")
+
+    def attempt_password_reset(self):
+        """Attempt password reset with code"""
+        if not all([self.email_input, self.reset_code_input, self.new_password_input]):
+            return
+
+        email = self.email_input.get_text().strip()
+        code = self.reset_code_input.get_text().strip()
+        new_password = self.new_password_input.get_text()
+
+        if not all([email, code, new_password]):
+            self.add_message("❌ Please fill all fields")
+            return
+
+        if len(new_password) < 6:
+            self.add_message("❌ Password must be at least 6 characters")
+            return
+
+        if self.connected and self.secure:
+            self.send_encrypted_message({
+                'type': 'password_reset',
+                'email': email,
+                'code': code,
+                'new_password': new_password
+            })
+            self.add_message("🔑 Resetting password...")
+        else:
+            self.add_message("❌ Not connected to server")
+
 
     def create_piece_sprite(self, piece_type, color, size=CELL_SIZE - 10):
         """Create a simple colored piece sprite programmatically"""
@@ -306,7 +678,7 @@ class SecureChessClient:
             thread.daemon = True
             thread.start()
 
-            self.add_message("🔒 Connected to secure server!")
+            self.add_message("Connected to secure server!")
             return True
         except Exception as e:
             self.add_message(f"❌ Connection failed: {e}")
@@ -444,10 +816,38 @@ class SecureChessClient:
         msg_type = message.get('type')
         print(f"📨 Received message: {msg_type}")
 
+        if msg_type == 'login_success':
+            self.authenticated = True
+            self.username = message.get('username')
+            self.state = GameState.MENU
+            self.clear_ui()
+            self.add_message(f"Welcome back, {self.username}!")
+
+        elif msg_type == 'register_success':
+            self.add_message("Registration successful! Please login.")
+            self.state = GameState.LOGIN
+            self.setup_login_ui()
+
+        elif msg_type == 'reset_code_sent':
+            if message.get('success'):
+                self.add_message("📧 Reset code sent! Check your email.")
+            else:
+                self.add_message(f"❌ {message.get('message', 'Reset failed')}")
+
+        elif msg_type == 'password_reset_result':
+            if message.get('success'):
+                self.add_message("✅ Password reset successful! Please login.")
+                self.state = GameState.LOGIN
+                self.setup_login_ui()
+            else:
+                self.add_message(f"❌ {message.get('message', 'Reset failed')}")
+
+
+
         if msg_type == 'queue_joined':
             self.state = GameState.WAITING
             position = message.get('position', 0)
-            self.add_message(f"🎯 Joined queue (position {position})")
+            self.add_message(f"Joined queue (position {position})")
 
         elif msg_type == 'game_start':
             print(f"🎮 Game starting: {message}")
@@ -456,7 +856,7 @@ class SecureChessClient:
             self.player_color = message['color']
             self.board = message['board']
             self.current_player = message['current_player']
-            self.add_message(f"🎲 Game started! You are {self.player_color}")
+            self.add_message(f"Game started! You are {self.player_color}")
 
         elif msg_type == 'move_made':
             self.board = message['board']
@@ -472,25 +872,25 @@ class SecureChessClient:
             if status == 'check':
                 self.in_check = True
                 check_color = game_status.get('in_check', 'unknown')
-                self.add_message(f"⚠️ {check_color.title()} is in check!")
+                self.add_message(f"⚠{check_color.title()} is in check!")
             elif status == 'checkmate':
                 winner = game_status.get('winner')
                 loser = game_status.get('loser')
 
                 if winner == self.player_color:
-                    self.game_end_message = f"🏆 YOU WIN!\nCheckmate!"
+                    self.game_end_message = f"YOU WIN!\nCheckmate!"
                 elif loser == self.player_color:
-                    self.game_end_message = f"💔 YOU LOSE\nCheckmate!"
+                    self.game_end_message = f"YOU LOSE\nCheckmate!"
                 else:
                     if self.current_player != self.player_color:
-                        self.game_end_message = f"🏆 YOU WIN!\nCheckmate!"
+                        self.game_end_message = f"YOU WIN!\nCheckmate!"
                     else:
-                        self.game_end_message = f"💔 YOU LOSE\nCheckmate!"
+                        self.game_end_message = f"YOU LOSE\nCheckmate!"
 
                 self.game_end_timer = pygame.time.get_ticks() + 4000
                 self.state = GameState.GAME_END
             elif status == 'stalemate':
-                self.game_end_message = f"🤝 DRAW\nStalemate!"
+                self.game_end_message = f"DRAW\nStalemate!"
                 self.game_end_timer = pygame.time.get_ticks() + 4000
                 self.state = GameState.GAME_END
             else:
@@ -499,12 +899,12 @@ class SecureChessClient:
             # Handle promotion notification
             if message.get('promotion', False):
                 promoted_to = message.get('promoted_to', 'queen')
-                self.add_message(f"👑 Pawn promoted to {promoted_to}!")
+                self.add_message(f"Pawn promoted to {promoted_to}!")
 
             # Handle capture notification
             if message.get('captured'):
                 captured_piece = message['captured']
-                self.add_message(f"💥 Captured {captured_piece['color']} {captured_piece['type']}!")
+                self.add_message(f"Captured {captured_piece['color']} {captured_piece['type']}!")
 
         elif msg_type == 'game_end':
             status = message['status']
@@ -523,23 +923,23 @@ class SecureChessClient:
 
             if status == 'checkmate':
                 if winner == self.player_color:
-                    self.game_end_message = f"🏆 YOU WIN!\n{game_message}"
+                    self.game_end_message = f"YOU WIN!\n{game_message}"
                 elif loser == self.player_color:
-                    self.game_end_message = f"💔 YOU LOSE\n{game_message}"
+                    self.game_end_message = f"YOU LOSE\n{game_message}"
                 else:
-                    self.game_end_message = f"🏁 Game Over\n{game_message}"
+                    self.game_end_message = f"Game Over\n{game_message}"
             elif status == 'stalemate':
-                self.game_end_message = f"🤝 DRAW\n{game_message}"
+                self.game_end_message = f"DRAW\n{game_message}"
 
             self.add_message(game_message)
             self.game_end_timer = pygame.time.get_ticks() + 4000
             self.state = GameState.GAME_END
 
         elif msg_type == 'error':
-            self.add_message(f"❌ Error: {message['message']}")
+            self.add_message(f"Error: {message['message']}")
 
         elif msg_type == 'opponent_disconnected':
-            self.add_message("👋 Opponent disconnected")
+            self.add_message("Opponent disconnected")
             self.game_end_message = "Opponent Disconnected\nGame ended"
             self.game_end_timer = pygame.time.get_ticks() + 4000
             self.state = GameState.GAME_END
@@ -756,14 +1156,14 @@ class SecureChessClient:
         piece = self.board[row][col]
 
         if self.current_player != self.player_color:
-            self.add_message("⏰ It's not your turn!")
+            self.add_message("It's not your turn!")
             return
 
         if piece and piece['color'] == self.player_color:
             self.selected_piece = (row, col)
             self.valid_moves = self.get_valid_moves(row, col)
             if not self.valid_moves:
-                self.add_message("🚫 This piece has no valid moves!")
+                self.add_message("This piece has no valid moves!")
         else:
             self.selected_piece = None
             self.valid_moves = []
@@ -795,26 +1195,28 @@ class SecureChessClient:
                         if self.needs_promotion(from_row, from_col, row, col):
                             self.promotion_pending = True
                             self.promotion_move = (from_row, from_col, row, col)
-                            self.add_message("👑 Choose promotion piece!")
+                            self.add_message("Choose promotion piece!")
                         else:
                             self.make_move(from_row, from_col, row, col)
                             self.add_message(
-                                f"♟️ Move: {chr(ord('a') + from_col)}{9 - from_row} to {chr(ord('a') + col)}{9 - row}")
+                                f"Move: {chr(ord('a') + from_col)}{9 - from_row} to {chr(ord('a') + col)}{9 - row}")
                     else:
                         self.select_piece(row, col)
                 else:
                     self.select_piece(row, col)
 
     def handle_menu_click(self, pos):
-        if not self.connected:
-            connect_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, 200, 200, 50)
-            if connect_button.collidepoint(pos):
-                self.connect_to_server()
-
-        if self.connected and self.secure and self.state == GameState.MENU:
-            queue_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, 270, 200, 50)
+        """Handle menu clicks with authentication check"""
+        if self.connected and self.secure and self.authenticated:
+            queue_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, 200, 200, 50)
             if queue_button.collidepoint(pos):
                 self.join_queue()
+
+        if self.authenticated:
+            logout_button = pygame.Rect(WINDOW_WIDTH // 2 - 75, 270, 150, 40)
+            if logout_button.collidepoint(pos):
+                self.logout()
+
 
     def handle_promotion_dialog_click(self, pos):
         """Handle clicks on the promotion dialog"""
@@ -842,6 +1244,49 @@ class SecureChessClient:
                 return
 
     # Drawing methods
+    def draw_login_screen(self):
+        """Draw login screen"""
+        self.screen.fill(WHITE)
+
+        # Title
+        title_text = self.title_font.render("Secure Chess Login", True, TEXT_COLOR)
+        title_rect = title_text.get_rect(center=(WINDOW_WIDTH // 2, 100))
+        self.screen.blit(title_text, title_rect)
+
+        # Security info
+        security_info = "End-to-End Encrypted Gaming"
+        security_text = self.font.render(security_info, True, (0, 128, 0))
+        security_rect = security_text.get_rect(center=(WINDOW_WIDTH // 2, 140))
+        self.screen.blit(security_text, security_rect)
+
+    def draw_register_screen(self):
+        """Draw registration screen"""
+        self.screen.fill(WHITE)
+
+        # Title
+        title_text = self.title_font.render("Create Account", True, TEXT_COLOR)
+        title_rect = title_text.get_rect(center=(WINDOW_WIDTH // 2, 100))
+        self.screen.blit(title_text, title_rect)
+
+        # Instructions
+        instruction_text = self.small_font.render("All fields are required", True, TEXT_COLOR)
+        instruction_rect = instruction_text.get_rect(center=(WINDOW_WIDTH // 2, 140))
+        self.screen.blit(instruction_text, instruction_rect)
+
+    def draw_password_reset_screen(self):
+        """Draw password reset screen"""
+        self.screen.fill(WHITE)
+
+        # Title
+        title_text = self.title_font.render("Reset Password", True, TEXT_COLOR)
+        title_rect = title_text.get_rect(center=(WINDOW_WIDTH // 2, 100))
+        self.screen.blit(title_text, title_rect)
+
+        # Instructions
+        instruction_text = self.small_font.render("Enter email to receive reset code", True, TEXT_COLOR)
+        instruction_rect = instruction_text.get_rect(center=(WINDOW_WIDTH // 2, 140))
+        self.screen.blit(instruction_text, instruction_rect)
+
     def draw_board(self):
         # Draw coordinate labels
         coord_font = pygame.font.Font(None, 16)
@@ -910,16 +1355,16 @@ class SecureChessClient:
         y_offset = 20
 
         # Title
-        title_text = self.title_font.render("🔒 Secure Chess", True, TEXT_COLOR)
+        title_text = self.title_font.render("Secure Chess", True, TEXT_COLOR)
         self.screen.blit(title_text, (sidebar_x + 20, y_offset))
         y_offset += 60
 
         # Security status
         if self.secure:
-            security_text = "🔒 Encrypted Connection"
+            security_text = "Encrypted Connection"
             security_color = (0, 128, 0)
         else:
-            security_text = "🔓 Unencrypted"
+            security_text = "Unencrypted"
             security_color = (255, 0, 0)
 
         security_surface = self.small_font.render(security_text, True, security_color)
@@ -928,30 +1373,30 @@ class SecureChessClient:
 
         # Game status
         if self.state == GameState.MENU:
-            status_text = "🏠 Main Menu"
+            status_text = "Main Menu"
             status_color = TEXT_COLOR
         elif self.state == GameState.WAITING:
-            status_text = "⏳ Waiting for opponent..."
+            status_text = "Waiting for opponent..."
             status_color = (255, 165, 0)
         elif self.state == GameState.PLAYING:
             if self.in_check:
                 if self.current_player == self.player_color:
-                    status_text = "⚠️ YOU ARE IN CHECK!"
+                    status_text = "YOU ARE IN CHECK!"
                     status_color = (255, 0, 0)
                 else:
-                    status_text = "⚠️ Opponent in check"
+                    status_text = "Opponent in check"
                     status_color = (255, 165, 0)
             elif self.current_player == self.player_color:
-                status_text = f"🎯 Your turn ({self.player_color})"
+                status_text = f"Your turn ({self.player_color})"
                 status_color = (0, 128, 0)
             else:
-                status_text = "⏰ Opponent's turn"
+                status_text = "Opponent's turn"
                 status_color = (128, 0, 0)
         elif self.state == GameState.GAME_END:
-            status_text = "🏁 Game Ended"
+            status_text = "Game Ended"
             status_color = TEXT_COLOR
         else:
-            status_text = "❓ Unknown State"
+            status_text = "Unknown State"
             status_color = TEXT_COLOR
 
         status_surface = self.font.render(status_text, True, status_color)
@@ -1015,51 +1460,59 @@ class SecureChessClient:
     def draw_menu(self):
         self.screen.fill(WHITE)
 
-        # Title
-        title_text = self.title_font.render("🔒 Secure Chess 9x9", True, TEXT_COLOR)
-        title_rect = title_text.get_rect(center=(WINDOW_WIDTH // 2, 100))
-        self.screen.blit(title_text, title_rect)
+        # Title with user info
+        if self.username:
+            title_text = f"Secure Chess - Welcome {self.username}!"
+            title_font_size = min(48, max(24, 48 - len(self.username)))
+            title_font = pygame.font.Font(None, title_font_size)
+        else:
+            title_text = "Secure Chess 9x9"
+            title_font = self.title_font
+
+        title_surface = title_font.render(title_text, True, TEXT_COLOR)
+        title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, 100))
+        self.screen.blit(title_surface, title_rect)
 
         # Security info
-        security_info = "🔐 End-to-End Encrypted Gaming"
+        security_info = "End-to-End Encrypted Gaming"
         security_text = self.font.render(security_info, True, (0, 128, 0))
         security_rect = security_text.get_rect(center=(WINDOW_WIDTH // 2, 140))
         self.screen.blit(security_text, security_rect)
 
-        # Connect button
-        if not self.connected:
-            connect_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, 200, 200, 50)
-            pygame.draw.rect(self.screen, BUTTON_COLOR, connect_button)
-            connect_text = self.font.render("🔗 Connect to Server", True, WHITE)
-            connect_text_rect = connect_text.get_rect(center=connect_button.center)
-            self.screen.blit(connect_text, connect_text_rect)
-
-        # Join queue button
-        if self.connected and self.secure and self.state == GameState.MENU:
-            queue_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, 270, 200, 50)
+        # Join queue button (only show if authenticated and connected)
+        if self.connected and self.secure and self.authenticated:
+            queue_button = pygame.Rect(WINDOW_WIDTH // 2 - 100, 200, 200, 50)
             pygame.draw.rect(self.screen, BUTTON_COLOR, queue_button)
-            queue_text = self.font.render("🎯 Join Game Queue", True, WHITE)
+            queue_text = self.font.render("Join Game Queue", True, WHITE)
             queue_text_rect = queue_text.get_rect(center=queue_button.center)
             self.screen.blit(queue_text, queue_text_rect)
 
+        # Logout button
+        if self.authenticated:
+            logout_button = pygame.Rect(WINDOW_WIDTH // 2 - 75, 270, 150, 40)
+            pygame.draw.rect(self.screen, (200, 100, 100), logout_button)
+            logout_text = self.font.render("Logout", True, WHITE)
+            logout_text_rect = logout_text.get_rect(center=logout_button.center)
+            self.screen.blit(logout_text, logout_text_rect)
+
         # Instructions
         instructions = [
-            "🎮 How to play:",
-            "1. Connect to secure server",
-            "2. Join the game queue",
-            "3. Wait for an opponent",
-            "4. Click pieces to select and move",
-            "5. Valid moves are highlighted in green",
-            "6. Kings in check are highlighted in red",
+            "How to play:",
+            "1. Join the game queue",
+            "2. Wait for an opponent",
+            "3. Click pieces to select and move",
+            "4. Valid moves are highlighted in green",
+            "5. Kings in check are highlighted in red",
             "",
-            "🔒 Security Features:",
+            "Security Features:",
+            "• User authentication system",
             "• Diffie-Hellman key exchange",
             "• AES-256-CBC encryption",
             "• Perfect forward secrecy",
             "• All game data encrypted"
         ]
 
-        y_start = 350
+        y_start = 330
         for i, instruction in enumerate(instructions):
             if instruction.startswith("•"):
                 color = (0, 100, 0)
@@ -1072,13 +1525,13 @@ class SecureChessClient:
             self.screen.blit(instr_text, (50, y_start + i * 25))
 
     def draw_waiting_screen(self):
-        waiting_text = self.title_font.render("⏳ Waiting for opponent...", True, TEXT_COLOR)
+        waiting_text = self.title_font.render("Waiting for opponent...", True, TEXT_COLOR)
         waiting_rect = waiting_text.get_rect(center=(BOARD_WIDTH // 2, BOARD_HEIGHT // 2))
         self.screen.blit(waiting_text, waiting_rect)
 
         # Security status
         if self.secure:
-            secure_text = self.font.render("🔒 Secure connection established", True, (0, 128, 0))
+            secure_text = self.font.render("Secure connection established", True, (0, 128, 0))
             secure_rect = secure_text.get_rect(center=(BOARD_WIDTH // 2, BOARD_HEIGHT // 2 + 40))
             self.screen.blit(secure_text, secure_rect)
 
@@ -1108,7 +1561,7 @@ class SecureChessClient:
         pygame.draw.rect(self.screen, BLACK, (dialog_x, dialog_y, dialog_width, dialog_height), 3)
 
         # Title
-        title_text = self.font.render("👑 Choose Promotion Piece", True, TEXT_COLOR)
+        title_text = self.font.render("Choose Promotion Piece", True, TEXT_COLOR)
         title_rect = title_text.get_rect(center=(dialog_x + dialog_width // 2, dialog_y + 30))
         self.screen.blit(title_text, title_rect)
 
@@ -1188,16 +1641,81 @@ class SecureChessClient:
 
         # Countdown message
         remaining_time = max(0, (self.game_end_timer - current_time) / 1000)
-        countdown_text = f"⏰ Returning to queue in {remaining_time:.1f}s..."
+        countdown_text = f"Returning to queue in {remaining_time:.1f}s..."
         countdown_surface = self.small_font.render(countdown_text, True, (128, 128, 128))
         countdown_rect = countdown_surface.get_rect(center=(box_x + box_width // 2, box_y + box_height - 60))
         self.screen.blit(countdown_surface, countdown_rect)
 
         # Click to continue hint
-        hint_text = "👆 Click anywhere or press any key to continue immediately"
+        hint_text = "Click anywhere or press any key to continue immediately"
         hint_surface = self.small_font.render(hint_text, True, (100, 100, 100))
         hint_rect = hint_surface.get_rect(center=(box_x + box_width // 2, box_y + box_height - 20))
         self.screen.blit(hint_surface, hint_rect)
+
+    def draw_connection_screen(self):
+        """Draw connection screen before login"""
+        self.screen.fill(WHITE)
+
+        # Title
+        title_text = self.title_font.render("Secure Chess", True, TEXT_COLOR)
+        title_rect = title_text.get_rect(center=(WINDOW_WIDTH // 2, 150))
+        self.screen.blit(title_text, title_rect)
+
+        # Connection status
+        status_text = "🔗 Connecting to server..."
+        status_surface = self.font.render(status_text, True, (255, 165, 0))
+        status_rect = status_surface.get_rect(center=(WINDOW_WIDTH // 2, 250))
+        self.screen.blit(status_surface, status_rect)
+
+        # Auto-connect on first load
+        if not hasattr(self, '_connection_attempted'):
+            self._connection_attempted = True
+            if self.connect_to_server():
+                # Connection successful, stay on login screen
+                pass
+            else:
+                # Show retry option
+                retry_text = "❌ Connection failed. Click to retry"
+                retry_surface = self.font.render(retry_text, True, (255, 0, 0))
+                retry_rect = retry_surface.get_rect(center=(WINDOW_WIDTH // 2, 300))
+                self.screen.blit(retry_surface, retry_rect)
+
+    def logout(self):
+        """Logout user and return to login screen"""
+        self.authenticated = False
+        self.username = None
+        self.state = GameState.LOGIN
+        self.setup_login_ui()
+        self.add_message("👋 Logged out successfully")
+
+    def reset_to_login(self):
+        """Reset to login state"""
+        self.state = GameState.LOGIN
+        self.authenticated = False
+        self.username = None
+        self.setup_login_ui()
+
+    def reset_to_menu(self):
+        """Reset all game state and return to menu"""
+        print("🔄 Resetting to menu state")
+        if self.authenticated:
+            self.state = GameState.MENU
+            self.clear_ui()  # Clear any auth UI elements
+        else:
+            self.state = GameState.LOGIN
+            self.setup_login_ui()
+
+        self.game_end_message = ""
+        self.game_end_timer = 0
+        self.in_check = False
+        self.selected_piece = None
+        self.valid_moves = []
+        self.board = [[None for _ in range(9)] for _ in range(9)]
+        self.player_color = None
+        self.game_id = None
+        self.current_player = "white"
+        self.promotion_pending = False
+        self.promotion_move = None
 
     def check_for_stuck_state(self, current_time):
         """Check if the client is stuck and needs to be reset"""
@@ -1221,16 +1739,26 @@ class SecureChessClient:
         print("🎮 Starting Secure Chess Client...")
 
         while self.running:
+            time_delta = self.clock.tick(60) / 1000.0
             current_time = pygame.time.get_ticks()
-
-            # Check for stuck states every 5 seconds
-            if current_time - self.stuck_check_timer > 5000:
-                self.stuck_check_timer = current_time
-                self.check_for_stuck_state(current_time)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+
+                # Handle GUI events for authentication screens
+                if self.state in [GameState.LOGIN, GameState.REGISTER, GameState.PASSWORD_RESET]:
+                    self.handle_ui_event(event)
+                    self.gui_manager.process_events(event)
+
+                    # Handle keyboard shortcuts for login
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN and self.state == GameState.LOGIN:
+                            self.attempt_login()
+                        elif event.key == pygame.K_ESCAPE:
+                            if self.state != GameState.LOGIN:
+                                self.state = GameState.LOGIN
+                                self.setup_login_ui()
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left click
@@ -1239,7 +1767,6 @@ class SecureChessClient:
                         elif self.state == GameState.PLAYING:
                             self.handle_click(event.pos)
                         elif self.state == GameState.GAME_END:
-                            # Click anywhere to return to menu immediately
                             print("👆 Game end screen clicked, returning to menu")
                             self.reset_to_menu()
 
@@ -1255,29 +1782,45 @@ class SecureChessClient:
                         elif event.key == pygame.K_n:
                             self.handle_promotion_choice('knight')
                         elif event.key == pygame.K_ESCAPE:
-                            self.handle_promotion_choice('queen')  # Default to queen
+                            self.handle_promotion_choice('queen')
                     elif self.state == GameState.GAME_END:
-                        # Any key press returns to menu immediately
                         print("⌨️ Key pressed in game end, returning to menu")
                         self.reset_to_menu()
                     else:
                         if event.key == pygame.K_ESCAPE:
-                            if self.state != GameState.MENU:
+                            if self.state == GameState.PLAYING:
+                                # Don't allow escape from game
+                                pass
+                            elif self.state == GameState.WAITING:
                                 self.state = GameState.MENU
-                                self.selected_piece = None
-                                self.valid_moves = []
+                            elif self.state == GameState.MENU and self.authenticated:
+                                # Logout option
+                                self.logout()
+
+            # Update GUI manager
+            if self.state in [GameState.LOGIN, GameState.REGISTER, GameState.PASSWORD_RESET]:
+                self.gui_manager.update(time_delta)
 
             # Clear screen
             self.screen.fill(WHITE)
 
             # Draw based on current state
-            if self.state == GameState.MENU:
+            if self.state == GameState.LOGIN:
+                if not self.connected:
+                    # Show connection screen first
+                    self.draw_connection_screen()
+                else:
+                    self.draw_login_screen()
+            elif self.state == GameState.REGISTER:
+                self.draw_register_screen()
+            elif self.state == GameState.PASSWORD_RESET:
+                self.draw_password_reset_screen()
+            elif self.state == GameState.MENU:
                 self.draw_menu()
             elif self.state == GameState.WAITING:
                 self.draw_waiting_screen()
                 self.draw_sidebar()
             elif self.state == GameState.PLAYING:
-                # Safety check: if not connected or no game_id, return to menu
                 if not self.connected or not self.game_id:
                     print("⚠️ Safety check: Not connected or no game_id, returning to menu")
                     self.reset_to_menu()
@@ -1289,16 +1832,18 @@ class SecureChessClient:
                 self.draw_sidebar()
                 self.draw_game_end_overlay()
             else:
-                # Unknown state, reset to menu
-                print(f"❓ Unknown state: {self.state}, resetting to menu")
-                self.reset_to_menu()
+                print(f"❓ Unknown state: {self.state}, resetting to login")
+                self.reset_to_login()
+
+            # Draw GUI elements
+            if self.state in [GameState.LOGIN, GameState.REGISTER, GameState.PASSWORD_RESET]:
+                self.gui_manager.draw_ui(self.screen)
 
             # Draw promotion dialog on top if needed
             if self.promotion_pending:
                 self.draw_promotion_dialog()
 
             pygame.display.flip()
-            self.clock.tick(60)
 
         # Cleanup
         print("🧹 Cleaning up client...")
@@ -1310,9 +1855,28 @@ class SecureChessClient:
         pygame.quit()
 
 
+
+def check_pygame_gui():
+    """Check and install pygame_gui if needed"""
+    try:
+        import pygame_gui
+        return True
+    except ImportError:
+        print("📦 Installing pygame_gui...")
+        import subprocess
+        import sys
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pygame_gui"])
+            print("✅ pygame_gui installed successfully!")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to install pygame_gui: {e}")
+            return False
+
+
 def main():
     """Main client function with enhanced error handling"""
-    # Install required dependency if not present
+    # Check required dependencies
     try:
         from cryptography.hazmat.primitives.ciphers import Cipher
         print("✅ Cryptography library found")
@@ -1323,14 +1887,16 @@ def main():
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install", "cryptography"])
             print("✅ Cryptography library installed successfully!")
-            # Re-import after installation
-            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-            from cryptography.hazmat.primitives import padding
-            from cryptography.hazmat.backends import default_backend
         except subprocess.CalledProcessError as e:
             print(f"❌ Failed to install cryptography library: {e}")
             print("Please install manually: pip install cryptography")
             return
+
+    # Check pygame_gui
+    if not check_pygame_gui():
+        print("❌ pygame_gui is required for the login system")
+        print("Please install manually: pip install pygame_gui")
+        return
 
     # Create and run client
     client = SecureChessClient()
@@ -1352,7 +1918,7 @@ def main():
             pygame.quit()
         except:
             pass
-        print("✅ Client shutdown complete")
+    print("✅ Client shutdown complete")
 
 
 if __name__ == "__main__":
